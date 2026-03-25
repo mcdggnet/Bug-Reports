@@ -1,6 +1,7 @@
 package com.leon.bugreport.gui;
 
 import com.leon.bugreport.keys.guiTextures;
+import com.leon.bugreport.listeners.ReportViewedEvent;
 import com.leon.bugreport.logging.ErrorMessages;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -102,6 +103,7 @@ public class bugreportGUI {
 		}
 
 		player.openInventory(gui);
+		Bukkit.getPluginManager().callEvent(new ReportViewedEvent(player, reportIDGUI, isArchivedGUI));
 		Bukkit.getPluginManager().registerEvents(new BugReportDetailsListener(gui, reportIDGUI, report, isArchivedGUI), plugin);
 	}
 

@@ -4,6 +4,8 @@ import com.leon.bugreport.BugReportDatabase;
 import com.leon.bugreport.BugReportLanguage;
 import com.leon.bugreport.discord.LinkDiscord;
 import com.leon.bugreport.keys.guiTextures;
+import com.leon.bugreport.listeners.ReportArchivedEvent;
+import com.leon.bugreport.listeners.ReportDeletedEvent;
 import com.leon.bugreport.logging.ErrorMessages;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -61,6 +63,7 @@ public class BugReportConfirmationGUI {
 
 	public void archiveReport(@NotNull Player player, @NotNull Integer reportIDGUI, @NotNull Boolean isArchivedDetails) {
 		BugReportDatabase.updateBugReportArchive(reportIDGUI, 1);
+		Bukkit.getPluginManager().callEvent(new ReportArchivedEvent(player, reportIDGUI));
 		player.openInventory(isArchivedDetails ? getArchivedBugReportsGUI(localCurrentPage) : getBugReportGUI(localCurrentPage));
 		player.sendMessage(returnStartingMessage(ChatColor.RED)
 				+ " Bug Report #" + reportIDGUI + " has been archived.");
@@ -70,6 +73,7 @@ public class BugReportConfirmationGUI {
 		try {
 			UUID playerId = player.getUniqueId();
 			BugReportDatabase.deleteBugReport(reportIDGUI);
+			Bukkit.getPluginManager().callEvent(new ReportDeletedEvent(player, reportIDGUI));
 
 			List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
 			reports.removeIf(report -> report.contains("Report ID: " + reportIDGUI));

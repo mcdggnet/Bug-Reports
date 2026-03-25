@@ -6,6 +6,7 @@ import com.leon.bugreport.extensions.PlanHook;
 import com.leon.bugreport.gui.BugReportConfirmationGUI;
 import com.leon.bugreport.listeners.PluginMessageListener;
 import com.leon.bugreport.listeners.ReportCreatedEvent;
+import com.leon.bugreport.listeners.ReportUnarchivedEvent;
 import com.leon.bugreport.logging.ErrorMessages;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -579,22 +580,24 @@ public class BugReportManager implements Listener {
 
 		updatePlanHook(playerId, playerName);
 
-		String discordWebhookMessageID = sendDiscordWebhook(message, worldName, playerName, location, gamemode, categoryId, serverName);
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+			String discordWebhookMessageID = sendDiscordWebhook(message, worldName, playerName, location, gamemode, categoryId, serverName);
 
-		if (debugMode) {
-			plugin.getLogger().info("Adding bug report to database...");
-		}
-		BugReportDatabase.addBugReport(playerName, playerId, worldName, header, message, location, gamemode, serverName, discordWebhookMessageID);
+			if (debugMode) {
+				plugin.getLogger().info("Adding bug report to database...");
+			}
+			BugReportDatabase.addBugReport(playerName, playerId, worldName, header, message, location, gamemode, serverName, discordWebhookMessageID);
 
-		sendBugReportNotifications(playerName);
+			Bukkit.getScheduler().runTask(plugin, () -> {
+				sendBugReportNotifications(playerName);
 
-		if (getServer().getMessenger().isIncomingChannelRegistered(BugReportPlugin.getPlugin(), "BungeeCord")) {
-			PluginMessageListener.sendPluginMessage(player);
-		}
+				if (getServer().getMessenger().isIncomingChannelRegistered(BugReportPlugin.getPlugin(), "BungeeCord")) {
+					PluginMessageListener.sendPluginMessage(player);
+				}
 
-		Bukkit.getScheduler().runTask(plugin, () -> {
-			ReportCreatedEvent reportEvent = new ReportCreatedEvent(header);
-			getServer().getPluginManager().callEvent(reportEvent);
+				ReportCreatedEvent reportEvent = new ReportCreatedEvent(header);
+				getServer().getPluginManager().callEvent(reportEvent);
+			});
 		});
 	}
 
@@ -899,6 +902,7 @@ public class BugReportManager implements Listener {
 		private void handleUnarchiveAction(Player player, Integer reportID) {
 			playButtonClickSound(player);
 			BugReportDatabase.updateBugReportArchive(reportID, 0);
+			Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getPluginManager().callEvent(new ReportUnarchivedEvent(player, reportID)));
 
 			if (debugMode) {
 				plugin.getLogger().info("Unarchiving bug report #" + reportID + "...");
