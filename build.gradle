@@ -1,0 +1,54 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.leon.bugreport'
+version = '0.15.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+compileJava.options.encoding = 'UTF-8'
+
+repositories {
+    maven { url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    maven { url 'https://libraries.minecraft.net/' }
+    maven { url 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
+    maven { url 'https://jitpack.io' }
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'org.spigotmc:spigot-api:1.18.1-R0.1-SNAPSHOT'
+    compileOnly 'com.mojang:authlib:3.4.40'
+    compileOnly 'me.clip:placeholderapi:2.11.6'
+    compileOnly 'com.github.plan-player-analytics:Plan:5.6.2965'
+
+    implementation 'org.bstats:bstats-bukkit:3.1.0'
+    implementation 'org.jetbrains:annotations:24.0.0'
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    archiveFileName.set("BugReports-${version}.jar")
+
+    relocate 'org.bstats', 'com.leon.bugreport'
+
+    minimize()
+
+    exclude '**/*.md'
+    exclude '**/*.markdown'
+    exclude '**/*.header'
+    exclude '**/*.xml'
+    exclude '**/pom.properties'
+    exclude '**/io.netty.versions.properties'
+    exclude '**/*.args'
+    exclude '**/*.so'
+    exclude 'module-info.class'
+}
+
+build.dependsOn shadowJar
