@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.leon.bugreport'
-version = '0.15.0'
+version = '0.16.0'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -26,6 +26,7 @@ dependencies {
     compileOnly 'com.mojang:authlib:3.4.40'
     compileOnly 'me.clip:placeholderapi:2.11.6'
     compileOnly 'com.github.plan-player-analytics:Plan:5.6.2965'
+    compileOnly 'com.github.MilkBowl:VaultAPI:1.7.1'
 
     implementation 'org.bstats:bstats-bukkit:3.1.0'
     implementation 'org.jetbrains:annotations:24.0.0'

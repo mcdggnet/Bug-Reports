@@ -9,10 +9,12 @@ public class ReportArchivedEvent extends Event {
 	private static final HandlerList HANDLERS = new HandlerList();
 	private final Player player;
 	private final int reportId;
+	private final double ecoRewardAmount;
 
-	public ReportArchivedEvent(Player player, int reportId) {
+	public ReportArchivedEvent(Player player, int reportId, double ecoRewardAmount) {
 		this.player = player;
 		this.reportId = reportId;
+		this.ecoRewardAmount = ecoRewardAmount;
 	}
 
 	public Player getPlayer() {
@@ -21,6 +23,10 @@ public class ReportArchivedEvent extends Event {
 
 	public int getReportId() {
 		return reportId;
+	}
+
+	public double getEcoRewardAmount() {
+		return ecoRewardAmount;
 	}
 
 	@Override

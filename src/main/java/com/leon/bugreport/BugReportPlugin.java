@@ -3,6 +3,7 @@ package com.leon.bugreport;
 import com.leon.bugreport.API.CacheCleanupListener;
 import com.leon.bugreport.commands.*;
 import com.leon.bugreport.expansions.BugPlaceholders;
+import com.leon.bugreport.extensions.EcoHook;
 import com.leon.bugreport.extensions.PlanHook;
 import com.leon.bugreport.listeners.ItemDropEvent;
 import com.leon.bugreport.listeners.ReportListener;
@@ -65,6 +66,10 @@ public class BugReportPlugin extends JavaPlugin implements Listener {
 			PlanHook.getInstance().hookIntoPlan();
 		} catch (NoClassDefFoundError planIsNotInstalled) {
 			// Ignore catch
+		}
+
+		if (!EcoHook.setup()) {
+			plugin.getLogger().info("Vault not found or no economy provider. Economy rewards disabled.");
 		}
 
 		if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
