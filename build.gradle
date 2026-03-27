@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'maven-publish'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
@@ -53,3 +54,24 @@ shadowJar {
 }
 
 build.dependsOn shadowJar
+
+publishing {
+    publications {
+        gpr(MavenPublication) {
+            groupId = project.group
+            artifactId = project.name.toLowerCase()
+            version = project.version
+            artifact(tasks.shadowJar)
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/mcdggnet/Bug-Reports")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}
