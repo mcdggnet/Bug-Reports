@@ -2,6 +2,7 @@ package com.leon.bugreport.gui;
 
 import com.leon.bugreport.BugReportDatabase;
 import com.leon.bugreport.BugReportLanguage;
+import com.leon.bugreport.PendingRewardNotifier;
 import com.leon.bugreport.discord.LinkDiscord;
 import com.leon.bugreport.extensions.EcoHook;
 import com.leon.bugreport.keys.guiTextures;
@@ -147,10 +148,13 @@ public class BugReportConfirmationGUI {
 			if (success) {
 				admin.sendMessage(returnStartingMessage(ChatColor.GREEN)
 						+ " Awarded $" + amount + " to " + username + " for bug report #" + reportIDGUI + ".");
+				String rewardMessage = returnStartingMessage(ChatColor.GREEN)
+						+ " You received $" + amount + " as a reward for your bug report #" + reportIDGUI + "!";
 				Player reporter = Bukkit.getPlayer(reporterUUID);
 				if (reporter != null) {
-					reporter.sendMessage(returnStartingMessage(ChatColor.GREEN)
-							+ " You received $" + amount + " as a reward for your bug report #" + reportIDGUI + "!");
+					reporter.sendMessage(rewardMessage);
+				} else {
+					PendingRewardNotifier.addPendingMessage(reporterUUID, rewardMessage);
 				}
 			}
 		} catch (IllegalArgumentException ignored) {}
@@ -244,7 +248,7 @@ public class BugReportConfirmationGUI {
 									String World = reportData.get("World");
 									String FullMessage = reportData.get("Full Message");
 									String Category_ID = reportData.get("Category ID");
-									if (Category_ID == null || Category_ID.equals("Unknown")) Category_ID = "0";
+									if (Category_ID == null || Category_ID.equals("Unknown") || Category_ID.equals("null")) Category_ID = "0";
 									Integer FinalCategory = Integer.valueOf(Category_ID);
 									String Location = reportData.get("Location");
 									String Gamemode = reportData.get("Gamemode");
@@ -314,7 +318,7 @@ public class BugReportConfirmationGUI {
 										String World = reportData.get("World");
 										String FullMessage = reportData.get("Full Message");
 										String Category_ID = reportData.get("Category ID");
-										if (Category_ID == null || Category_ID.equals("Unknown")) Category_ID = "0";
+										if (Category_ID == null || Category_ID.equals("Unknown") || Category_ID.equals("null")) Category_ID = "0";
 										Integer FinalCategory = Integer.valueOf(Category_ID);
 										String Location = reportData.get("Location");
 										String Gamemode = reportData.get("Gamemode");

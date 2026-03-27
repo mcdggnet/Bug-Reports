@@ -574,7 +574,7 @@ public class BugReportDatabase {
 
 	private static String formatReportDataForCache(Map<String, String> reportData) {
 		return reportData.entrySet().stream()
-				.map(entry -> entry.getKey() + "=" + entry.getValue())
+				.map(entry -> entry.getKey() + "=" + (entry.getValue() != null ? entry.getValue() : ""))
 				.collect(Collectors.joining("||"));
 	}
 

@@ -1,6 +1,7 @@
 package com.leon.bugreport;
 
 import com.leon.bugreport.API.CacheCleanupListener;
+import com.leon.bugreport.PendingRewardNotifier;
 import com.leon.bugreport.commands.*;
 import com.leon.bugreport.expansions.BugPlaceholders;
 import com.leon.bugreport.extensions.EcoHook;
@@ -75,6 +76,8 @@ public class BugReportPlugin extends JavaPlugin implements Listener {
 		if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
 			new BugPlaceholders(this).register();
 		}
+
+		PendingRewardNotifier.init(getDataFolder());
 
 		if (!getDataFolder().exists() && !getDataFolder().mkdirs()) {
 			String errorMessage = ErrorMessages.getErrorMessage(26);
@@ -161,6 +164,11 @@ public class BugReportPlugin extends JavaPlugin implements Listener {
 
 	@EventHandler
 	public void onPlayerJoin(@NotNull PlayerJoinEvent event) {
+		Player joiningPlayer = event.getPlayer();
+		for (String msg : PendingRewardNotifier.getAndClearPendingMessages(joiningPlayer.getUniqueId())) {
+			joiningPlayer.sendMessage(msg);
+		}
+
 		for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
 			if (onlinePlayer.isOp() || onlinePlayer.hasPermission("bugreport.notify")) {
 				UUID playerId = onlinePlayer.getUniqueId();
