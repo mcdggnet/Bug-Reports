@@ -5,6 +5,7 @@ import com.leon.bugreport.BugReportDatabase;
 import com.leon.bugreport.BugReportLanguage;
 import com.leon.bugreport.BugReportManager;
 import com.leon.bugreport.listeners.UpdateChecker;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -99,24 +100,24 @@ public class BugListCommand implements CommandExecutor {
 	}
 
 	private void returnReloadCommand(@NotNull Player player) {
-		// Reload the plugin's configuration
 		plugin.reloadConfig();
 
-		// Fetch the updated language code from the config
 		String updatedLanguageCode = plugin.getConfig().getString("language", "en_US");
-
-		// Reset the languageCode in BugReportLanguage
 		BugReportLanguage.setPluginLanguage(updatedLanguageCode);
-
-		// Reload language files and other components
 		BugReportLanguage.loadLanguageFiles();
 		BugReportManager.reloadConfig();
-		BugReportDatabase.reloadConnection();
 
-		// Notify the player of the reload completion
 		player.sendMessage(pluginColor + pluginTitle + " " +
-				Objects.requireNonNullElse(endingPluginTitleColor, ChatColor.GREEN) +
-				"The plugin has been reloaded.");
+				Objects.requireNonNullElse(endingPluginTitleColor, ChatColor.YELLOW) +
+				"Reloading...");
+
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+			BugReportDatabase.reloadConnection();
+			Bukkit.getScheduler().runTask(plugin, () ->
+					player.sendMessage(pluginColor + pluginTitle + " " +
+							Objects.requireNonNullElse(endingPluginTitleColor, ChatColor.GREEN) +
+							"The plugin has been reloaded."));
+		});
 	}
 
 

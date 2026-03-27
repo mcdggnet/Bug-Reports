@@ -238,8 +238,6 @@ public class BugReportManager implements Listener {
 	}
 
 	public static @NotNull Inventory generateBugReportGUI(int testCurrentPage, boolean showArchived) {
-		loadBugReports();
-
 		List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
 
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> reports.stream()

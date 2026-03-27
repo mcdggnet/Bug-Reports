@@ -128,9 +128,9 @@ public class BugReportPlugin extends JavaPlugin implements Listener {
 
 	@EventHandler
 	public void onPlayerLeave(@NotNull PlayerQuitEvent event) {
-		Player player = event.getPlayer();
-		UUID playerId = player.getUniqueId();
-		BugReportDatabase.setPlayerLastLoginTimestamp(playerId);
+		UUID playerId = event.getPlayer().getUniqueId();
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
+				BugReportDatabase.setPlayerLastLoginTimestamp(playerId));
 	}
 
 	private int compareVersions(@NotNull String version1, @NotNull String version2) {
@@ -169,55 +169,60 @@ public class BugReportPlugin extends JavaPlugin implements Listener {
 			joiningPlayer.sendMessage(msg);
 		}
 
+		if (!config.getBoolean("enableBugReportNotifications")) {
+			return;
+		}
+
 		for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
 			if (onlinePlayer.isOp() || onlinePlayer.hasPermission("bugreport.notify")) {
 				UUID playerId = onlinePlayer.getUniqueId();
 
-				if (!config.getBoolean("enableBugReportNotifications")) {
+				if (notifiedPlayers.contains(playerId)) {
 					continue;
 				}
 
-				if (notifiedPlayers.contains(playerId)) {
-					return;
-				}
+				notifiedPlayers.add(playerId);
 
-				long lastLoginTimestamp = BugReportDatabase.getPlayerLastLoginTimestamp(playerId);
+				final Player notifyTarget = onlinePlayer;
+				Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+					long lastLoginTimestamp = BugReportDatabase.getPlayerLastLoginTimestamp(playerId);
 
-				List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
-				List<String> newReports = getNewReports(reports, lastLoginTimestamp);
+					Bukkit.getScheduler().runTask(plugin, () -> {
+						List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
+						List<String> newReports = getNewReports(reports, lastLoginTimestamp);
 
-				StringBuilder message = new StringBuilder();
-				if (!newReports.isEmpty()) {
-					message.append(pluginColor)
-							.append(pluginTitle).append(" ")
-							.append(Objects.requireNonNullElse(endingPluginTitleColor, ChatColor.GRAY))
-							.append(BugReportLanguage.getValueFromLanguageFile("newReportsMessage", "You have %numReports% new reports")
-									.replace("%numReports%", String.valueOf(newReports.size())))
-							.append("\n");
-				} else {
-					message.append(pluginColor)
-							.append(pluginTitle).append(" ")
-							.append(Objects.requireNonNullElse(endingPluginTitleColor, ChatColor.GRAY))
-							.append(BugReportLanguage.getValueFromLanguageFile("noNewReportsMessage", "You have no new reports"))
-							.append("\n");
-				}
-
-				if (getConfig().getBoolean("update-checker-join")) {
-					updateChecker.getVersion(spigotVersion -> {
-						String serverVersion = this.getDescription().getVersion();
-						if (compareVersions(serverVersion, spigotVersion) < 0) {
-							message.append(pluginColor).append(pluginTitle).append(" ")
+						StringBuilder message = new StringBuilder();
+						if (!newReports.isEmpty()) {
+							message.append(pluginColor)
+									.append(pluginTitle).append(" ")
 									.append(Objects.requireNonNullElse(endingPluginTitleColor, ChatColor.GRAY))
-									.append("A new version of Bug Report is available:")
-									.append(ChatColor.YELLOW).append(" v").append(spigotVersion);
-							onlinePlayer.sendMessage(message.toString());
+									.append(BugReportLanguage.getValueFromLanguageFile("newReportsMessage", "You have %numReports% new reports")
+											.replace("%numReports%", String.valueOf(newReports.size())))
+									.append("\n");
+						} else {
+							message.append(pluginColor)
+									.append(pluginTitle).append(" ")
+									.append(Objects.requireNonNullElse(endingPluginTitleColor, ChatColor.GRAY))
+									.append(BugReportLanguage.getValueFromLanguageFile("noNewReportsMessage", "You have no new reports"))
+									.append("\n");
+						}
+
+						if (getConfig().getBoolean("update-checker-join")) {
+							updateChecker.getVersion(spigotVersion -> {
+								String serverVersion = this.getDescription().getVersion();
+								if (compareVersions(serverVersion, spigotVersion) < 0) {
+									message.append(pluginColor).append(pluginTitle).append(" ")
+											.append(Objects.requireNonNullElse(endingPluginTitleColor, ChatColor.GRAY))
+											.append("A new version of Bug Report is available:")
+											.append(ChatColor.YELLOW).append(" v").append(spigotVersion);
+									notifyTarget.sendMessage(message.toString());
+								}
+							});
+						} else {
+							notifyTarget.sendMessage(message.toString());
 						}
 					});
-				} else {
-					onlinePlayer.sendMessage(message.toString());
-				}
-
-				notifiedPlayers.add(playerId);
+				});
 			}
 		}
 	}
