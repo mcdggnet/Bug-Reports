@@ -218,7 +218,11 @@ public class BugReportConfirmationGUI {
 									Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 										BugReportDatabase.updateBugReportArchive(reportIDGUI, 1);
 										Bukkit.getScheduler().runTask(plugin, () -> {
-											Bukkit.getPluginManager().callEvent(new ReportArchivedEvent(player, reportIDGUI, ecoAmount));
+											String rawUUID = reportData != null ? reportData.get("UUID") : null;
+											String rawUsername = reportData != null ? reportData.get("Username") : null;
+											java.util.UUID reporterUUID = null;
+											try { if (rawUUID != null) reporterUUID = java.util.UUID.fromString(rawUUID); } catch (IllegalArgumentException ignored) {}
+											Bukkit.getPluginManager().callEvent(new ReportArchivedEvent(player, reportIDGUI, ecoAmount, reporterUUID, rawUsername));
 
 											if (config.getBoolean("enableDiscordWebhook", true)) {
 												if (bugReportDiscordWebhookID != null) {
@@ -302,7 +306,11 @@ public class BugReportConfirmationGUI {
 											List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
 											reports.removeIf(report -> report.contains("Report ID: " + reportIDGUI));
 
-											Bukkit.getPluginManager().callEvent(new ReportDeletedEvent(player, reportIDGUI, ecoAmount));
+											String rawUUIDDel = reportData != null ? reportData.get("UUID") : null;
+											String rawUsernameDel = reportData != null ? reportData.get("Username") : null;
+											java.util.UUID reporterUUIDDel = null;
+											try { if (rawUUIDDel != null) reporterUUIDDel = java.util.UUID.fromString(rawUUIDDel); } catch (IllegalArgumentException ignored) {}
+											Bukkit.getPluginManager().callEvent(new ReportDeletedEvent(player, reportIDGUI, ecoAmount, reporterUUIDDel, rawUsernameDel));
 
 											if (config.getBoolean("enableDiscordWebhook", true)) {
 												if (bugReportDiscordWebhookID != null) {
