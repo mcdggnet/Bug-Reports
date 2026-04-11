@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.leon.bugreport.API.DataSource;
 import static com.leon.bugreport.API.DataSource.getPlayerHead;
 import static com.leon.bugreport.API.ErrorClass.logErrorMessage;
 import static com.leon.bugreport.BugReportDatabase.getStaticUUID;
@@ -239,11 +240,6 @@ public class BugReportManager implements Listener {
 
 	public static @NotNull Inventory generateBugReportGUI(int testCurrentPage, boolean showArchived) {
 		List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
-
-		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> reports.stream()
-				.map(report -> getReportByKey(report, "Username"))
-				.forEach(DataSource::getPlayerHead));
-
 		List<String> filteredReports = getFilteredReports(showArchived, reports);
 		int totalPages = Math.max(1, (int) Math.ceil((double) filteredReports.size() / ITEMS_PER_PAGE));
 		int currentPage = Math.max(1, Math.min(testCurrentPage, totalPages));
@@ -257,8 +253,47 @@ public class BugReportManager implements Listener {
 
 		addReportItemsToGui(filteredReports, currentPage, gui);
 		addNavigationButtonsToGui(gui, currentPage, totalPages);
+		scheduleHeadUpdates(filteredReports, currentPage, gui);
 
 		return gui;
+	}
+
+	private static void scheduleHeadUpdates(@NotNull List<String> filteredReports, int currentPage, Inventory gui) {
+		if (!config.getBoolean("enablePlayerHeads", true)) return;
+
+		int startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+		int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredReports.size());
+
+		List<String> usernames = new ArrayList<>();
+		List<Integer> slots = new ArrayList<>();
+		for (int i = startIndex, slot = 0; i < endIndex; i++, slot++) {
+			String username = getReportByKey(filteredReports.get(i), "Username");
+			if (!DataSource.isPlayerHeadCached(username)) {
+				usernames.add(username);
+				slots.add(slot);
+			}
+		}
+
+		if (usernames.isEmpty()) return;
+
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+			for (String username : usernames) {
+				DataSource.getPlayerHead(username); // populates SKULL_CACHE
+			}
+			Bukkit.getScheduler().runTask(plugin, () -> {
+				for (int i = 0; i < slots.size(); i++) {
+					int slot = slots.get(i);
+					ItemStack existing = gui.getItem(slot);
+					if (existing == null || existing.getType() != Material.PLAYER_HEAD) continue;
+					ItemStack newHead = DataSource.getCachedPlayerHeadOrDefault(usernames.get(i));
+					ItemMeta existingMeta = existing.getItemMeta();
+					if (existingMeta != null) {
+						newHead.setItemMeta(existingMeta.clone());
+					}
+					gui.setItem(slot, newHead);
+				}
+			});
+		});
 	}
 
 	private static void addReportItemsToGui(@NotNull List<String> filteredReports, int currentPage, Inventory gui) {
@@ -268,20 +303,57 @@ public class BugReportManager implements Listener {
 		for (int i = startIndex, slotIndex = 0; i < endIndex; i++, slotIndex++) {
 			String report = filteredReports.get(i);
 			String reportID = getReportByKey(report, "Report ID");
-			String firstLine = report.split("\n")[0];
-			String username = firstLine.split(": ")[1];
+			String username = getReportByKey(report, "Username");
+			String fullMessage = getReportByKey(report, "Full Message");
+			String world = getReportByKey(report, "World");
+			String status = getReportByKey(report, "Status");
 
 			ItemStack playerHead = config.getBoolean("enablePlayerHeads")
-					? getPlayerHead(username)
+					? DataSource.getCachedPlayerHeadOrDefault(username)
 					: createInfoItem(Material.ENCHANTED_BOOK, ChatColor.GOLD + "Username", ChatColor.WHITE + username, false);
 
 			ItemMeta itemMeta = playerHead.getItemMeta();
 			Objects.requireNonNull(itemMeta).setDisplayName(ChatColor.YELLOW + "Bug Report #" + reportID);
-			itemMeta.setLore(Collections.singletonList(ChatColor.GRAY + firstLine));
+			itemMeta.setLore(buildReportLore(username, fullMessage, world, status));
 			playerHead.setItemMeta(itemMeta);
 
 			gui.setItem(slotIndex, playerHead);
 		}
+	}
+
+	private static @NotNull List<String> buildReportLore(String username, String fullMessage, String world, String status) {
+		List<String> lore = new ArrayList<>();
+		lore.add(ChatColor.GOLD + "Reporter: " + ChatColor.WHITE + (username != null ? username : "Unknown"));
+
+		if (world != null && !world.isEmpty()) {
+			lore.add(ChatColor.DARK_GRAY + "World: " + ChatColor.GRAY + world);
+		}
+		if (status != null && !status.isEmpty() && !status.equals("0") && !status.equals("null")) {
+			lore.add(ChatColor.DARK_GRAY + "Status: " + ChatColor.GRAY + status);
+		}
+
+		lore.add("");
+
+		if (fullMessage != null && !fullMessage.isEmpty()) {
+			// Word-wrap message at ~38 visible characters per line
+			String[] words = fullMessage.split(" ");
+			StringBuilder currentLine = new StringBuilder();
+			for (String word : words) {
+				if (currentLine.length() > 0 && currentLine.length() + 1 + word.length() > 38) {
+					lore.add(ChatColor.WHITE + currentLine.toString());
+					currentLine = new StringBuilder();
+				}
+				if (currentLine.length() > 0) currentLine.append(" ");
+				currentLine.append(word);
+			}
+			if (currentLine.length() > 0) {
+				lore.add(ChatColor.WHITE + currentLine.toString());
+			}
+		}
+
+		lore.add("");
+		lore.add(ChatColor.YELLOW + "Shift+Click " + ChatColor.GRAY + "to archive");
+		return lore;
 	}
 
 	private static void addNavigationButtonsToGui(Inventory gui, int currentPage, int totalPages) {
@@ -739,6 +811,21 @@ public class BugReportManager implements Listener {
 						.findFirst()
 						.orElse(null);
 
+				// Shift+left-click archives directly from the list
+				if (event.isShiftClick() && event.isLeftClick() && !isArchivedGUI) {
+					if (!player.hasPermission("bugreport.archive") && !player.hasPermission("bugreport.admin")) {
+						player.sendMessage(returnStartingMessage(ChatColor.RED) + " You don't have permission to archive bug reports!");
+						return;
+					}
+					playButtonClickSound(player);
+					Bukkit.getPluginManager().registerEvents(
+							new BugReportConfirmationGUI.BugReportConfirmationListener(null, reportID, false, true),
+							plugin
+					);
+					BugReportConfirmationGUI.openConfirmationGUI(player, true);
+					return;
+				}
+
 				if (debugMode) {
 					plugin.getLogger().info("Opening bug report details GUI for report ID " + reportID);
 				}
@@ -899,64 +986,68 @@ public class BugReportManager implements Listener {
 
 		private void handleUnarchiveAction(Player player, Integer reportID) {
 			playButtonClickSound(player);
-			BugReportDatabase.updateBugReportArchive(reportID, 0);
-			Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getPluginManager().callEvent(new ReportUnarchivedEvent(player, reportID)));
+			HandlerList.unregisterAll(this);
 
 			if (debugMode) {
 				plugin.getLogger().info("Unarchiving bug report #" + reportID + "...");
 			}
 
-			if (config.getBoolean("enableDiscordWebhook", true)) {
-				if (debugMode) {
-					plugin.getLogger().info("Sending unarchive notification to Discord...");
-				}
+			Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+				BugReportDatabase.updateBugReportArchive(reportID, 0);
 
-				String bugReportDiscordWebhookID = BugReportDatabase.getBugReportDiscordWebhookMessageID(reportID);
-				if (bugReportDiscordWebhookID != null) {
-					Map<String, String> fullBugReportSplit = BugReportDatabase.getBugReportById(reportIDGUI);
-					System.out.println("UN-ARCHIVED bug report split: " + fullBugReportSplit);
-
-					String Username = fullBugReportSplit.get("Username");
-					String UUID = fullBugReportSplit.get("UUID");
-					String World = fullBugReportSplit.get("World");
-					String FullMessage = fullBugReportSplit.get("FullMessage");
-
-					String CategoryID = fullBugReportSplit.get("CategoryID");
-					if (CategoryID == null || CategoryID.equals("Unknown")) {
-						CategoryID = "0";
+				if (config.getBoolean("enableDiscordWebhook", true)) {
+					if (debugMode) {
+						plugin.getLogger().info("Sending unarchive notification to Discord...");
 					}
-					Integer FinalCategory = Integer.valueOf(CategoryID);
 
-					String Location = fullBugReportSplit.get("Location");
-					String Gamemode = fullBugReportSplit.get("Gamemode");
-					String Status = fullBugReportSplit.get("Status");
-					String ServerName = fullBugReportSplit.get("ServerName");
+					String bugReportDiscordWebhookID = BugReportDatabase.getBugReportDiscordWebhookMessageID(reportID);
+					if (bugReportDiscordWebhookID != null) {
+						Map<String, String> fullBugReportSplit = BugReportDatabase.getBugReportById(reportIDGUI);
+						System.out.println("UN-ARCHIVED bug report split: " + fullBugReportSplit);
 
-					LinkDiscord.modifyNotification(
-							Username,
-							UUID,
-							World,
-							Location,
-							Gamemode,
-							Status,
-							FinalCategory,
-							ServerName,
-							FullMessage,
-							bugReportDiscordWebhookID,
-							Color.GREEN,
-							"Bug Report #" + reportID + " has been unarchived."
-					);
-				} else {
-					String errorMessage = ErrorMessages.getErrorMessage(25);
-					plugin.getLogger().warning(errorMessage);
-					logErrorMessage(errorMessage);
+						String Username = fullBugReportSplit.get("Username");
+						String UUID = fullBugReportSplit.get("UUID");
+						String World = fullBugReportSplit.get("World");
+						String FullMessage = fullBugReportSplit.get("FullMessage");
+
+						String CategoryID = fullBugReportSplit.get("CategoryID");
+						if (CategoryID == null || CategoryID.equals("Unknown")) {
+							CategoryID = "0";
+						}
+						Integer FinalCategory = Integer.valueOf(CategoryID);
+
+						String Location = fullBugReportSplit.get("Location");
+						String Gamemode = fullBugReportSplit.get("Gamemode");
+						String Status = fullBugReportSplit.get("Status");
+						String ServerName = fullBugReportSplit.get("ServerName");
+
+						LinkDiscord.modifyNotification(
+								Username,
+								UUID,
+								World,
+								Location,
+								Gamemode,
+								Status,
+								FinalCategory,
+								ServerName,
+								FullMessage,
+								bugReportDiscordWebhookID,
+								Color.GREEN,
+								"Bug Report #" + reportID + " has been unarchived."
+						);
+					} else {
+						String errorMessage = ErrorMessages.getErrorMessage(25);
+						plugin.getLogger().warning(errorMessage);
+						logErrorMessage(errorMessage);
+					}
 				}
-			}
 
-			player.openInventory(getBugReportGUI(localCurrentPage));
-			player.sendMessage(returnStartingMessage(ChatColor.YELLOW) + " Bug Report #" + reportID + " has been unarchived.");
-
-			HandlerList.unregisterAll(this);
+				Bukkit.getScheduler().runTask(plugin, () -> {
+					Bukkit.getPluginManager().callEvent(new ReportUnarchivedEvent(player, reportID));
+					player.openInventory(getBugReportGUI(localCurrentPage));
+					player.sendMessage(returnStartingMessage(ChatColor.YELLOW) + " Bug Report #" + reportID + " has been unarchived.");
+				});
+			});
 		}
 
 		private void handleArchiveAction(@NotNull Player player, Integer reportID, String bugReportID, boolean isArchivedDetails) {
@@ -968,7 +1059,7 @@ public class BugReportManager implements Listener {
 				}
 
 				Bukkit.getPluginManager().registerEvents(
-						new BugReportConfirmationGUI.BugReportConfirmationListener(gui, reportID, isArchivedDetails),
+						new BugReportConfirmationGUI.BugReportConfirmationListener(gui, reportID, isArchivedDetails, false),
 						plugin
 				);
 
@@ -989,7 +1080,7 @@ public class BugReportManager implements Listener {
 				}
 
 				Bukkit.getPluginManager().registerEvents(
-						new BugReportConfirmationGUI.BugReportConfirmationListener(gui, reportID, isArchivedDetails),
+						new BugReportConfirmationGUI.BugReportConfirmationListener(gui, reportID, isArchivedDetails, false),
 						plugin
 				);
 

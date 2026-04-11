@@ -135,7 +135,8 @@ public class BugReportConfirmationGUI {
 	public record BugReportConfirmationListener(
 			Inventory gui,
 			Integer reportIDGUI,
-			Boolean fromArchivedGUI
+			Boolean fromArchivedGUI,
+			Boolean fromBugList
 	) implements Listener {
 		@EventHandler(priority = EventPriority.NORMAL)
 		public void onInventoryClick(@NotNull InventoryClickEvent event) {
@@ -217,41 +218,42 @@ public class BugReportConfirmationGUI {
 								promptEcoAmount(player, ecoAmount ->
 									Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 										BugReportDatabase.updateBugReportArchive(reportIDGUI, 1);
+
+										if (config.getBoolean("enableDiscordWebhook", true)) {
+											if (bugReportDiscordWebhookID != null) {
+												if (debugMode) plugin.getLogger().info("Sending archive notification to Discord...");
+
+												String Username = reportData != null ? reportData.get("Username") : null;
+												String UUID = reportData != null ? reportData.get("UUID") : null;
+												String World = reportData != null ? reportData.get("World") : null;
+												String FullMessage = reportData != null ? reportData.get("Full Message") : null;
+												String Category_ID = reportData != null ? reportData.get("Category ID") : null;
+												if (Category_ID == null || Category_ID.equals("Unknown") || Category_ID.equals("null")) Category_ID = "0";
+												Integer FinalCategory = Integer.valueOf(Category_ID);
+												String Location = reportData != null ? reportData.get("Location") : null;
+												String Gamemode = reportData != null ? reportData.get("Gamemode") : null;
+												String Status = reportData != null ? reportData.get("Status") : null;
+												String ServerName = reportData != null ? reportData.get("Server Name") : null;
+
+												LinkDiscord.modifyNotification(
+														Username, UUID, World, Location, Gamemode, Status,
+														FinalCategory, ServerName, FullMessage,
+														bugReportDiscordWebhookID, Color.ORANGE,
+														"Bug Report #" + reportIDGUI + " has been archived."
+												);
+											} else {
+												String errorMessage = ErrorMessages.getErrorMessage(25);
+												plugin.getLogger().warning(errorMessage);
+												logErrorMessage(errorMessage);
+											}
+										}
+
 										Bukkit.getScheduler().runTask(plugin, () -> {
 											String rawUUID = reportData != null ? reportData.get("UUID") : null;
 											String rawUsername = reportData != null ? reportData.get("Username") : null;
 											java.util.UUID reporterUUID = null;
 											try { if (rawUUID != null) reporterUUID = java.util.UUID.fromString(rawUUID); } catch (IllegalArgumentException ignored) {}
 											Bukkit.getPluginManager().callEvent(new ReportArchivedEvent(player, reportIDGUI, ecoAmount, reporterUUID, rawUsername));
-
-											if (config.getBoolean("enableDiscordWebhook", true)) {
-												if (bugReportDiscordWebhookID != null) {
-													if (debugMode) plugin.getLogger().info("Sending archive notification to Discord...");
-
-													String Username = reportData.get("Username");
-													String UUID = reportData.get("UUID");
-													String World = reportData.get("World");
-													String FullMessage = reportData.get("Full Message");
-													String Category_ID = reportData.get("Category ID");
-													if (Category_ID == null || Category_ID.equals("Unknown") || Category_ID.equals("null")) Category_ID = "0";
-													Integer FinalCategory = Integer.valueOf(Category_ID);
-													String Location = reportData.get("Location");
-													String Gamemode = reportData.get("Gamemode");
-													String Status = reportData.get("Status");
-													String ServerName = reportData.get("Server Name");
-
-													LinkDiscord.modifyNotification(
-															Username, UUID, World, Location, Gamemode, Status,
-															FinalCategory, ServerName, FullMessage,
-															bugReportDiscordWebhookID, Color.ORANGE,
-															"Bug Report #" + reportIDGUI + " has been archived."
-													);
-												} else {
-													String errorMessage = ErrorMessages.getErrorMessage(25);
-													plugin.getLogger().warning(errorMessage);
-													logErrorMessage(errorMessage);
-												}
-											}
 
 											player.sendMessage(returnStartingMessage(ChatColor.RED)
 													+ " Bug Report #" + reportIDGUI + " has been archived.");
@@ -302,6 +304,36 @@ public class BugReportConfirmationGUI {
 								promptEcoAmount(player, ecoAmount ->
 									Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 										BugReportDatabase.deleteBugReport(reportIDGUI);
+
+										if (config.getBoolean("enableDiscordWebhook", true)) {
+											if (bugReportDiscordWebhookID != null) {
+												if (debugMode) plugin.getLogger().info("Sending deletion notification to Discord...");
+
+												String Username = reportData != null ? reportData.get("Username") : null;
+												String UUID = reportData != null ? reportData.get("UUID") : null;
+												String World = reportData != null ? reportData.get("World") : null;
+												String FullMessage = reportData != null ? reportData.get("Full Message") : null;
+												String Category_ID = reportData != null ? reportData.get("Category ID") : null;
+												if (Category_ID == null || Category_ID.equals("Unknown") || Category_ID.equals("null")) Category_ID = "0";
+												Integer FinalCategory = Integer.valueOf(Category_ID);
+												String Location = reportData != null ? reportData.get("Location") : null;
+												String Gamemode = reportData != null ? reportData.get("Gamemode") : null;
+												String Status = reportData != null ? reportData.get("Status") : null;
+												String ServerName = reportData != null ? reportData.get("Server Name") : null;
+
+												LinkDiscord.modifyNotification(
+														Username, UUID, World, Location, Gamemode, Status,
+														FinalCategory, ServerName, FullMessage,
+														bugReportDiscordWebhookID, Color.RED,
+														"Bug Report #" + reportIDGUI + " has been deleted."
+												);
+											} else {
+												String errorMessage = ErrorMessages.getErrorMessage(25);
+												plugin.getLogger().warning(errorMessage);
+												logErrorMessage(errorMessage);
+											}
+										}
+
 										Bukkit.getScheduler().runTask(plugin, () -> {
 											List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
 											reports.removeIf(report -> report.contains("Report ID: " + reportIDGUI));
@@ -311,35 +343,6 @@ public class BugReportConfirmationGUI {
 											java.util.UUID reporterUUIDDel = null;
 											try { if (rawUUIDDel != null) reporterUUIDDel = java.util.UUID.fromString(rawUUIDDel); } catch (IllegalArgumentException ignored) {}
 											Bukkit.getPluginManager().callEvent(new ReportDeletedEvent(player, reportIDGUI, ecoAmount, reporterUUIDDel, rawUsernameDel));
-
-											if (config.getBoolean("enableDiscordWebhook", true)) {
-												if (bugReportDiscordWebhookID != null) {
-													if (debugMode) plugin.getLogger().info("Sending deletion notification to Discord...");
-
-													String Username = reportData.get("Username");
-													String UUID = reportData.get("UUID");
-													String World = reportData.get("World");
-													String FullMessage = reportData.get("Full Message");
-													String Category_ID = reportData.get("Category ID");
-													if (Category_ID == null || Category_ID.equals("Unknown") || Category_ID.equals("null")) Category_ID = "0";
-													Integer FinalCategory = Integer.valueOf(Category_ID);
-													String Location = reportData.get("Location");
-													String Gamemode = reportData.get("Gamemode");
-													String Status = reportData.get("Status");
-													String ServerName = reportData.get("Server Name");
-
-													LinkDiscord.modifyNotification(
-															Username, UUID, World, Location, Gamemode, Status,
-															FinalCategory, ServerName, FullMessage,
-															bugReportDiscordWebhookID, Color.RED,
-															"Bug Report #" + reportIDGUI + " has been deleted."
-													);
-												} else {
-													String errorMessage = ErrorMessages.getErrorMessage(25);
-													plugin.getLogger().warning(errorMessage);
-													logErrorMessage(errorMessage);
-												}
-											}
 
 											player.sendMessage(returnStartingMessage(ChatColor.RED)
 													+ " Bug Report #" + reportIDGUI + " has been deleted.");
@@ -366,10 +369,11 @@ public class BugReportConfirmationGUI {
 		private void returnFromConfirmationGUI(@NotNull Player player) {
 			player.openInventory(getBugReportGUI(localCurrentPage));
 
-			List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
-			String report = reports.stream().filter(reportString -> reportString.contains("Report ID: " + reportIDGUI)).findFirst().orElse(null);
-
-			openBugReportDetailsGUI(player, report, reportIDGUI, false);
+			if (!Boolean.TRUE.equals(fromBugList)) {
+				List<String> reports = bugReports.getOrDefault(getStaticUUID(), new ArrayList<>(Collections.singletonList("DUMMY")));
+				String report = reports.stream().filter(reportString -> reportString.contains("Report ID: " + reportIDGUI)).findFirst().orElse(null);
+				openBugReportDetailsGUI(player, report, reportIDGUI, false);
+			}
 
 			HandlerList.unregisterAll(this);
 		}

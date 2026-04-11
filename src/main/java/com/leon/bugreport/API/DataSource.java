@@ -22,6 +22,7 @@ import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.leon.bugreport.API.ErrorClass.logErrorMessage;
 import static com.leon.bugreport.BugReportManager.config;
@@ -32,6 +33,8 @@ public class DataSource {
 	private static final File CACHE_FILE = new File(CACHE_DIR, "playerData.json");
 	private static final Gson GSON = new Gson();
 	private static long CACHE_EXPIRY_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+	// In-memory skull cache — avoids repeated disk reads for already-fetched heads
+	private static final Map<String, ItemStack> SKULL_CACHE = new ConcurrentHashMap<>();
 
 	public static long convertTimeToMillis(@NotNull String timeString) {
 		Map<String, Integer> timeUnits = Map.of("m", 60, "h", 3600, "d", 86400, "w", 604800, "mo", 2592000, "y", 31536000);
@@ -190,13 +193,31 @@ public class DataSource {
 		return null;
 	}
 
-	public static @NotNull ItemStack getPlayerHead(String playerName) {
-		Map<String, CacheEntry> cache = loadCache();
-		cleanOutdatedCache(true);
+	public static boolean isPlayerHeadCached(String playerName) {
+		return playerName != null && SKULL_CACHE.containsKey(playerName);
+	}
 
+	public static @NotNull ItemStack getCachedPlayerHeadOrDefault(String playerName) {
+		if (playerName == null || playerName.trim().isEmpty()) {
+			return new ItemStack(Material.PLAYER_HEAD);
+		}
+		ItemStack cached = SKULL_CACHE.get(playerName);
+		return cached != null ? cached.clone() : new ItemStack(Material.PLAYER_HEAD);
+	}
+
+	public static @NotNull ItemStack getPlayerHead(String playerName) {
 		if (playerName == null || playerName.trim().isEmpty()) {
 			return getDefaultPlayerHead();
 		}
+
+		// Fast path: in-memory skull cache — no disk I/O
+		ItemStack cachedSkull = SKULL_CACHE.get(playerName);
+		if (cachedSkull != null) {
+			return cachedSkull.clone();
+		}
+
+		Map<String, CacheEntry> cache = loadCache();
+		cleanOutdatedCache(true);
 
 		try {
 			String base64;
@@ -220,7 +241,9 @@ public class DataSource {
 				updatePlayerHeadCache(playerName, uuid.toString(), base64, cache);
 			}
 
-			return base64 != null && !base64.isEmpty() ? createSkullItem(base64, playerName) : getDefaultPlayerHead();
+			ItemStack result = base64 != null && !base64.isEmpty() ? createSkullItem(base64, playerName) : getDefaultPlayerHead();
+			SKULL_CACHE.put(playerName, result.clone());
+			return result;
 		} catch (Exception e) {
 			String errorMessage = ErrorMessages.getErrorMessageWithAdditionalMessage(6, e.getMessage());
 			String finalErrorMessage = errorMessage.replaceAll("%playerName%", playerName);
